@@ -1,0 +1,29 @@
+[package]
+name = "burrow-server"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "burrow-server"
+path = "src/main.rs"
+
+[dependencies]
+burrow-common = { path = "../common" }
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+bytes = { workspace = true }
+base64 = "0.22"
+axum = { version = "0.7", features = ["ws"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["trace"] }
+tokio-stream = "0.1"
+rand = "0.8"
+subtle = "2"
+governor = "0.6"

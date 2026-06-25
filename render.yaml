@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: burrow-server
+    runtime: rust
+    buildCommand: cargo build --release --bin burrow-server
+    startCommand: ./target/release/burrow-server
+    envVars:
+      - key: SERVER_SECRET
+        generateValue: true          # Render auto-generates a random secret
+      - key: PUBLIC_HOST
+        value: burrow-server.onrender.com   # Change to your actual Render URL
+      - key: RUST_LOG
+        value: burrow_server=info
+      - key: PORT
+        value: 8080
+    healthCheckPath: /health
