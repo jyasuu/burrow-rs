@@ -89,17 +89,9 @@ async fn main() -> Result<()> {
         .route("/health", get(health_handler))
         // WebSocket control channel
         .route("/tunnel/ws", get(ws_handler))
-        // HTTP proxy entry points
+        // HTTP proxy entry points — wildcard catches all proxy requests
         .route(
-            "/{subdomain}/{*path}",
-            get(proxy_handler)
-                .post(proxy_handler)
-                .put(proxy_handler)
-                .delete(proxy_handler)
-                .patch(proxy_handler),
-        )
-        .route(
-            "/{subdomain}",
+            "/*rest",
             get(proxy_handler)
                 .post(proxy_handler)
                 .put(proxy_handler)
@@ -283,7 +275,7 @@ async fn deregister(tunnels: &TunnelRegistry, subdomain: &str) {
 // ── HTTP proxy handler ────────────────────────────────────────────────────────
 
 async fn proxy_handler(
-    Path(params): Path<HashMap<String, String>>,
+    Path(rest_path): Path<String>,
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     req: Request<Body>,
@@ -293,10 +285,15 @@ async fn proxy_handler(
         return error_response(StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded");
     }
 
-    let subdomain = match params.get("subdomain") {
-        Some(s) => s.clone(),
-        None => return error_response(StatusCode::BAD_REQUEST, "missing subdomain"),
+    // Parse subdomain from the path: "/{subdomain}" or "/{subdomain}/..."
+    let trimmed = rest_path.trim_start_matches('/');
+    let subdomain = match trimmed.split_once('/') {
+        Some((s, _)) => s.to_string(),
+        None => trimmed.to_string(),
     };
+    if subdomain.is_empty() {
+        return error_response(StatusCode::BAD_REQUEST, "missing subdomain");
+    }
 
     let entry = {
         let reg = state.tunnels.read().await;

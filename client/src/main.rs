@@ -346,3 +346,168 @@ fn error_response(request_id: &str, msg: &str) -> ControlMessage {
         body_b64: B64.encode(body),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── is_hop_by_hop ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn hop_by_hop_known_headers() {
+        let empty = &[];
+        assert!(is_hop_by_hop("connection", empty));
+        assert!(is_hop_by_hop("keep-alive", empty));
+        assert!(is_hop_by_hop("proxy-authenticate", empty));
+        assert!(is_hop_by_hop("proxy-authorization", empty));
+        assert!(is_hop_by_hop("te", empty));
+        assert!(is_hop_by_hop("trailers", empty));
+        assert!(is_hop_by_hop("transfer-encoding", empty));
+        assert!(is_hop_by_hop("upgrade", empty));
+    }
+
+    #[test]
+    fn hop_by_hop_case_insensitive() {
+        let empty = &[];
+        // is_hop_by_hop is called with already-lowercased input (see forward_request)
+        assert!(is_hop_by_hop("connection", empty));
+        assert!(is_hop_by_hop("transfer-encoding", empty));
+        assert!(is_hop_by_hop("keep-alive", empty));
+    }
+
+    #[test]
+    fn hop_by_hop_not_hop_by_hop() {
+        let empty = &[];
+        assert!(!is_hop_by_hop("content-type", empty));
+        assert!(!is_hop_by_hop("host", empty));
+        assert!(!is_hop_by_hop("x-forwarded-for", empty));
+    }
+
+    #[test]
+    fn hop_by_hop_connection_tokens() {
+        let tokens = &["x-custom".to_string(), "keep-alive".to_string()];
+        assert!(is_hop_by_hop("x-custom", tokens));
+        assert!(is_hop_by_hop("keep-alive", tokens)); // also in the built-in set
+        assert!(!is_hop_by_hop("x-other", tokens));
+    }
+
+    // ── connection_tokens ──────────────────────────────────────────────────────
+
+    #[test]
+    fn connection_tokens_parses() {
+        let headers = vec![
+            ("connection".into(), "keep-alive, x-foo".into()),
+        ];
+        let tokens = connection_tokens(&headers);
+        assert!(tokens.contains(&"keep-alive".to_string()));
+        assert!(tokens.contains(&"x-foo".to_string()));
+    }
+
+    #[test]
+    fn connection_tokens_empty_when_no_connection_header() {
+        let headers = vec![("content-type".into(), "text/plain".into())];
+        let tokens = connection_tokens(&headers);
+        assert!(tokens.is_empty());
+    }
+
+    #[test]
+    fn connection_tokens_case_insensitive_key() {
+        let headers = vec![
+            ("Connection".into(), "X-Foo".into()),
+        ];
+        let tokens = connection_tokens(&headers);
+        assert!(tokens.contains(&"x-foo".to_string()));
+    }
+
+    #[test]
+    fn connection_tokens_multiple_connection_headers() {
+        let headers = vec![
+            ("connection".into(), "a".into()),
+            ("connection".into(), "b, c".into()),
+        ];
+        let tokens = connection_tokens(&headers);
+        assert!(tokens.contains(&"a".to_string()));
+        assert!(tokens.contains(&"b".to_string()));
+        assert!(tokens.contains(&"c".to_string()));
+    }
+
+    // ── rewrite_set_cookie_domain ──────────────────────────────────────────────
+
+    #[test]
+    fn rewrite_domain_localhost_to_public() {
+        let result = rewrite_set_cookie_domain(
+            "session=abc; Domain=localhost; Path=/",
+            "myapp.onrender.com",
+        );
+        assert_eq!(result, "session=abc; Domain=myapp.onrender.com; Path=/");
+    }
+
+    #[test]
+    fn rewrite_domain_127_0_0_1_to_public() {
+        let result = rewrite_set_cookie_domain(
+            "token=xyz; Domain=127.0.0.1",
+            "example.com",
+        );
+        assert_eq!(result, "token=xyz; Domain=example.com");
+    }
+
+    #[test]
+    fn rewrite_domain_case_insensitive() {
+        let result = rewrite_set_cookie_domain(
+            "x=y; DOMAIN=LOCALHOST",
+            "public.io",
+        );
+        // The attribute name is normalized to "Domain"
+        assert_eq!(result, "x=y; Domain=public.io");
+    }
+
+    #[test]
+    fn rewrite_domain_other_domain_untouched() {
+        let result = rewrite_set_cookie_domain(
+            "x=y; Domain=.example.com",
+            "public.io",
+        );
+        assert_eq!(result, "x=y; Domain=.example.com");
+    }
+
+    #[test]
+    fn rewrite_domain_multiple_cookies() {
+        let result = rewrite_set_cookie_domain(
+            "a=1; Domain=localhost; Path=/, b=2; Domain=localhost",
+            "p.io",
+        );
+        assert_eq!(result, "a=1; Domain=p.io; Path=/, b=2; Domain=p.io");
+    }
+
+    #[test]
+    fn rewrite_domain_no_domain_unchanged() {
+        let result = rewrite_set_cookie_domain(
+            "session=abc; Path=/",
+            "p.io",
+        );
+        assert_eq!(result, "session=abc; Path=/");
+    }
+
+    #[test]
+    fn rewrite_domain_empty_cookie() {
+        let result = rewrite_set_cookie_domain("", "p.io");
+        assert_eq!(result, "");
+    }
+
+    // ── error_response ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn error_response_format() {
+        let msg = error_response("req-1", "upstream error: connection refused");
+        match msg {
+            ControlMessage::ResponseOutgoing { request_id, status, headers, body_b64 } => {
+                assert_eq!(request_id, "req-1");
+                assert_eq!(status, 502);
+                assert!(headers.iter().any(|(k, v)| k == "content-type" && v == "text/plain"));
+                let body = B64.decode(&body_b64).unwrap();
+                assert_eq!(String::from_utf8_lossy(&body), "upstream error: connection refused");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+}

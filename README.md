@@ -139,3 +139,49 @@ cargo run --bin burrow -- --port 3000 --token test --subdomain demo
 # 終端 4：測試
 curl http://localhost:8080/demo/
 ```
+
+---
+
+## Quick Start Scripts
+
+| Script | Description |
+|--------|-------------|
+| `scripts/demo.sh` | Prints terminal-by-terminal setup instructions |
+| `scripts/test-integration.sh` | Full automated integration test (11 tests) |
+
+### Integration Tests
+
+```bash
+# Run all integration tests (builds + tests)
+bash scripts/test-integration.sh
+
+# Skip build if already built
+bash scripts/test-integration.sh skipbuild
+```
+
+The integration test validates:
+- Tunnel registration with custom subdomain
+- HTTP GET forwarding (status + body)
+- HTTP POST forwarding with request body
+- `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host` header injection
+- Host header rewrite (`localhost:{port}`)
+- 404 for unknown subdomains
+- Invalid token rejection
+- Duplicate subdomain rejection
+
+### Unit Tests
+
+```bash
+# Run all unit tests
+cargo test
+
+# Run specific crate tests
+cargo test -p burrow-common
+cargo test -p burrow-client
+```
+
+Unit tests cover:
+- `ControlMessage` JSON serialization round-trips (all variants)
+- Hop-by-hop header filtering (`is_hop_by_hop`, `connection_tokens`)
+- `Set-Cookie` `Domain` attribute rewriting
+- Error response formatting
