@@ -56,28 +56,31 @@ render.yaml 已配置，直接 `git push`，Render 會自動偵測。
 
 ---
 
-## 使用方式
+## 安裝
 
-`burrow` 是單一 binary，包含 server 和 client 子命令：
+### 下載預編譯二進位檔
+
+從 [GitHub Releases](https://github.com/jyasuu/burrow-rs/releases) 下載對應平台的壓縮檔：
+
+| 平台 | 檔案 |
+|------|------|
+| Linux (glibc) | `burrow-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux (musl, 靜態) | `burrow-x86_64-unknown-linux-musl.tar.gz` |
+| macOS (Intel) | `burrow-x86_64-apple-darwin.tar.gz` |
+| macOS (Apple Silicon) | `burrow-aarch64-apple-darwin.tar.gz` |
+| Windows | `burrow-x86_64-pc-windows-msvc.tar.gz` |
+
+### Docker
 
 ```bash
-# 啟動 server
-burrow server
-
-# 啟動 client
-burrow client --port 3000 --token my-secret
+docker pull ghcr.io/jyasuu/burrow-rs:latest
+docker run -e SERVER_SECRET=... -e PUBLIC_HOST=... -p 8080:8080 ghcr.io/jyasuu/burrow-rs:latest
 ```
 
-### 安裝
+### 原始碼編譯
 
 ```bash
 cargo install --path cli
-```
-
-或直接執行：
-
-```bash
-cargo run --bin burrow -- --help
 ```
 
 ### 啟動隧道
