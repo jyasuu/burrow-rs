@@ -14,7 +14,6 @@
 //! burrow
 //! ```
 
-use anyhow::Result;
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -33,7 +32,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), burrow_client::ClientError> {
     tracing_subscriber::fmt()
         .with_env_filter(
             std::env::var("RUST_LOG").unwrap_or_else(|_| "burrow=info".into()),

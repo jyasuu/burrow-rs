@@ -74,6 +74,7 @@ async fn main() -> Result<()> {
                 max_body_bytes: max_body_bytes.unwrap_or(4 * 1024 * 1024),
             })
             .await
+            .map_err(anyhow::Error::from)
         }
         Command::Client { port, server, token, subdomain, reconnect_delay } => {
             let opts = burrow_client::ClientOpts {
@@ -83,7 +84,7 @@ async fn main() -> Result<()> {
                 subdomain,
                 reconnect_delay,
             };
-            burrow_client::run(&opts).await
+            burrow_client::run(&opts).await.map_err(anyhow::Error::from)
         }
     }
 }

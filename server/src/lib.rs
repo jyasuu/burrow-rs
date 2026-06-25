@@ -1,4 +1,3 @@
-use anyhow::Result;
 use axum::{
     body::Body,
     extract::{
@@ -12,10 +11,12 @@ use axum::{
 };
 use std::net::SocketAddr;
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
 use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
 use std::{
     collections::HashMap,
+    net::IpAddr,
     num::NonZeroU32,
     sync::Arc,
     time::Duration,
@@ -28,6 +29,12 @@ use tokio::{
 use tracing::{info, warn};
 use burrow_common::ControlMessage;
 use uuid::Uuid;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ServerError {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+}
 
 pub struct ServerOpts {
     pub secret: String,
@@ -60,19 +67,20 @@ struct AppState {
     secret: String,
     public_host: String,
     max_body_bytes: usize,
-    rate_limiter: Arc<DefaultDirectRateLimiter>,
+    rate_limiters: Arc<DashMap<IpAddr, Arc<DefaultDirectRateLimiter>>>,
+    quota: Quota,
 }
 
-pub async fn run(opts: ServerOpts) -> Result<()> {
+pub async fn run(opts: ServerOpts) -> Result<(), ServerError> {
     let quota = Quota::per_minute(NonZeroU32::new(120).unwrap());
-    let rate_limiter = Arc::new(RateLimiter::direct(quota));
 
     let state = AppState {
         tunnels: Arc::new(RwLock::new(HashMap::new())),
         secret: opts.secret,
         public_host: opts.public_host,
         max_body_bytes: opts.max_body_bytes,
-        rate_limiter,
+        rate_limiters: Arc::new(DashMap::new()),
+        quota,
     };
 
     let app = Router::new()
@@ -115,8 +123,7 @@ async fn handle_client(socket: WebSocket, state: AppState) {
                         ControlMessage::Error {
                             message: "expected Register as first message".into(),
                         }
-                        .to_json()
-                        .into(),
+                        .to_json(),
                     ))
                     .await;
                 return;
@@ -132,8 +139,7 @@ async fn handle_client(socket: WebSocket, state: AppState) {
                 ControlMessage::Error {
                     message: "invalid token".into(),
                 }
-                .to_json()
-                .into(),
+                .to_json(),
             ))
             .await;
         return;
@@ -156,8 +162,7 @@ async fn handle_client(socket: WebSocket, state: AppState) {
                     ControlMessage::Error {
                         message: format!("subdomain '{subdomain}' already in use"),
                     }
-                    .to_json()
-                    .into(),
+                    .to_json(),
                 ))
                 .await;
             return;
@@ -172,8 +177,7 @@ async fn handle_client(socket: WebSocket, state: AppState) {
                 subdomain: subdomain.clone(),
                 public_url: public_url.clone(),
             }
-            .to_json()
-            .into(),
+            .to_json(),
         ))
         .await
         .is_err()
@@ -200,7 +204,7 @@ async fn handle_client(socket: WebSocket, state: AppState) {
     let send_task = tokio::spawn(async move {
         while let Some(msg) = msg_rx.recv().await {
             if ws_send
-                .send(Message::Text(msg.to_json().into()))
+                .send(Message::Text(msg.to_json()))
                 .await
                 .is_err()
             {
@@ -253,8 +257,13 @@ async fn proxy_handler(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     req: Request<Body>,
 ) -> Response {
-    if state.rate_limiter.check().is_err() {
-        return error_response(StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded");
+    {
+        let limiter = state.rate_limiters
+            .entry(peer.ip())
+            .or_insert_with(|| Arc::new(RateLimiter::direct(state.quota)));
+        if limiter.check().is_err() {
+            return error_response(StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded");
+        }
     }
 
     let trimmed = rest_path.trim_start_matches('/');

@@ -187,7 +187,6 @@ dependencies = [
 name = "burrow-client"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "base64",
  "burrow-common",
  "bytes",
@@ -196,6 +195,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
  "tokio-stream",
  "tokio-tungstenite 0.21.0",
@@ -219,17 +219,18 @@ dependencies = [
 name = "burrow-server"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "axum",
  "base64",
  "burrow-common",
  "bytes",
+ "dashmap 6.2.1",
  "futures-util",
  "governor",
  "rand",
  "serde",
  "serde_json",
  "subtle",
+ "thiserror",
  "tokio",
  "tokio-stream",
  "tokio-tungstenite 0.21.0",
@@ -372,6 +373,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
 dependencies = [
  "cfg-if",
+ "hashbrown 0.14.5",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core",
+]
+
+[[package]]
+name = "dashmap"
+version = "6.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6361d5c062261c78a176addb82d4c821ae42bed6089de0e12603cd25de2059c"
+dependencies = [
+ "cfg-if",
+ "crossbeam-utils",
  "hashbrown 0.14.5",
  "lock_api",
  "once_cell",
@@ -605,7 +620,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68a7f542ee6b35af73b06abc0dad1c1bae89964e4e253bc4b587b91c9637867b"
 dependencies = [
  "cfg-if",
- "dashmap",
+ "dashmap 5.5.3",
  "futures",
  "futures-timer",
  "no-std-compat",

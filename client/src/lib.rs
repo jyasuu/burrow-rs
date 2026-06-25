@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use futures_util::{SinkExt, StreamExt};
 use reqwest::Client as HttpClient;
@@ -7,6 +6,26 @@ use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info, warn};
 use burrow_common::ControlMessage;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ClientError {
+    #[error("connection error: {0}")]
+    Connection(Box<tokio_tungstenite::tungstenite::Error>),
+    #[error("registration rejected: {0}")]
+    Rejected(String),
+    #[error("unexpected server message")]
+    UnexpectedMessage,
+    #[error("connection closed")]
+    Closed,
+    #[error("HTTP client error: {0}")]
+    Http(#[from] reqwest::Error),
+}
+
+impl From<tokio_tungstenite::tungstenite::Error> for ClientError {
+    fn from(e: tokio_tungstenite::tungstenite::Error) -> Self {
+        ClientError::Connection(Box::new(e))
+    }
+}
 
 pub struct ClientOpts {
     pub port: u16,
@@ -28,7 +47,7 @@ impl Default for ClientOpts {
     }
 }
 
-pub async fn run(opts: &ClientOpts) -> Result<()> {
+pub async fn run(opts: &ClientOpts) -> Result<(), ClientError> {
     loop {
         info!(
             "Connecting to tunnel server {} → localhost:{}",
@@ -36,20 +55,18 @@ pub async fn run(opts: &ClientOpts) -> Result<()> {
         );
         match run_session(opts).await {
             Ok(()) => {
-                info!("Session ended cleanly. Reconnecting in {}s…", opts.reconnect_delay);
+                info!("Session ended cleanly. Reconnecting in {}s\u{2026}", opts.reconnect_delay);
             }
             Err(e) => {
-                error!("Session error: {e:#}. Reconnecting in {}s…", opts.reconnect_delay);
+                error!("Session error: {e:#}. Reconnecting in {}s\u{2026}", opts.reconnect_delay);
             }
         }
         sleep(Duration::from_secs(opts.reconnect_delay)).await;
     }
 }
 
-async fn run_session(args: &ClientOpts) -> Result<()> {
-    let (ws_stream, _) = connect_async(&args.server)
-        .await
-        .with_context(|| format!("failed to connect to {}", args.server))?;
+async fn run_session(args: &ClientOpts) -> Result<(), ClientError> {
+    let (ws_stream, _) = connect_async(&args.server).await?;
 
     let (mut ws_send, mut ws_recv) = ws_stream.split();
 
@@ -58,9 +75,8 @@ async fn run_session(args: &ClientOpts) -> Result<()> {
         token: args.token.clone(),
     };
     ws_send
-        .send(Message::Text(register.to_json().into()))
-        .await
-        .context("send Register")?;
+        .send(Message::Text(register.to_json()))
+        .await?;
 
     let (public_url, _subdomain) = match ws_recv.next().await {
         Some(Ok(Message::Text(txt))) => match ControlMessage::from_json(&txt) {
@@ -72,11 +88,11 @@ async fn run_session(args: &ClientOpts) -> Result<()> {
                 (public_url, subdomain)
             }
             Ok(ControlMessage::Error { message }) => {
-                anyhow::bail!("Server rejected registration: {message}");
+                return Err(ClientError::Rejected(message));
             }
-            _ => anyhow::bail!("unexpected server message"),
+            _ => return Err(ClientError::UnexpectedMessage),
         },
-        _ => anyhow::bail!("connection closed before Registered"),
+        _ => return Err(ClientError::Closed),
     };
     let public_host = {
         let url = url::Url::parse(&public_url).ok();
@@ -95,7 +111,7 @@ async fn run_session(args: &ClientOpts) -> Result<()> {
     let mut send_task = tokio::spawn(async move {
         while let Some(msg) = resp_rx.recv().await {
             if ws_send
-                .send(Message::Text(msg.to_json().into()))
+                .send(Message::Text(msg.to_json()))
                 .await
                 .is_err()
             {

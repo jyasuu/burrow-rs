@@ -15,11 +15,10 @@
 //! | `MAX_BODY_BYTES` | `4194304` | Max request body size in bytes |
 //! | `RUST_LOG` | `"burrow_server=debug,tower_http=info"` | Tracing filter |
 
-use anyhow::Result;
 use tracing::warn;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), burrow_server::ServerError> {
     tracing_subscriber::fmt()
         .with_env_filter(
             std::env::var("RUST_LOG")
