@@ -22,7 +22,7 @@ jobs:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             ext: ""
-            builder: docker
+            deps: musl-tools gcc-x86-64-linux-musl
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             ext: ".exe"
@@ -40,18 +40,14 @@ jobs:
       - name: Install system deps
         if: matrix.deps
         run: sudo apt-get update && sudo apt-get install -y ${{ matrix.deps }}
-      - name: Build (Docker-based cross compile)
-        if: matrix.builder == 'docker'
+      - name: Configure musl cross-compilation
+        if: contains(matrix.target, 'musl')
         run: |
-          docker run --rm -v $PWD:/workspace -w /workspace \
-            rust:alpine sh -c "\
-              apk add --no-cache musl-dev openssl-dev pkgconfig \
-              && cargo build --release -p burrow \
-            "
-          mkdir -p target/${{ matrix.target }}/release
-          cp target/release/burrow target/${{ matrix.target }}/release/burrow
-      - run: cargo build --release --bin burrow --target ${{ matrix.target }}
-        if: matrix.builder != 'docker'
+          echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=x86_64-linux-musl-gcc" >> "$GITHUB_ENV"
+          echo "CC_x86_64_unknown_linux_musl=x86_64-linux-musl-gcc" >> "$GITHUB_ENV"
+          echo "OPENSSL_STATIC=1" >> "$GITHUB_ENV"
+      - name: Build
+        run: cargo build --release --bin burrow --target ${{ matrix.target }}
       - name: Package
         shell: bash
         run: |
