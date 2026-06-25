@@ -13,4 +13,6 @@ services:
         value: burrow_server=info
       - key: PORT
         value: 8080
+      - key: MAX_BODY_BYTES
+        value: 4194304
     healthCheckPath: /health

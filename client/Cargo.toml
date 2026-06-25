@@ -3,8 +3,12 @@ name = "burrow-client"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "burrow_client"
+path = "src/lib.rs"
+
 [[bin]]
-name = "burrow"
+name = "burrow-client"
 path = "src/main.rs"
 
 [dependencies]

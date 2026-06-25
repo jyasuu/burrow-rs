@@ -7,11 +7,10 @@
   Requires reading `ConnectInfo` from axum and extracting the real remote addr (accounting for `X-Forwarded-For` behind Render's proxy).
   _Files:_ `server/src/main.rs`
 
-- [ ] **WebSocket `Upgrade` header passthrough documentation**
-  nginx reverse proxy drops `Connection: Upgrade` by default, silently killing the client WebSocket.
-  Add a nginx config snippet to README showing correct `proxy_set_header Upgrade` / `proxy_set_header Connection "upgrade"` directives.
-  Also audit client's hop-by-hop filter to ensure `Upgrade` is forwarded when tunnelling WS-over-WS.
-  _Files:_ `README.md`, `client/src/main.rs`
+- [x] **WebSocket `Upgrade` header passthrough documentation**
+  Added nginx config snippet to README with correct `proxy_set_header Upgrade` / `proxy_set_header Connection "upgrade"` directives.
+  Audit: `upgrade` is in the hop-by-hop drop list (correct for HTTP tunnel). WS-over-WS (separate feature) will need to lift it.
+  _Files:_ `README.md`
 
 ---
 
@@ -86,18 +85,19 @@
   Detect `Upgrade: websocket` in request headers → switch to bidirectional binary relay mode instead of the request/response round-trip.
   _Files:_ `common/src/lib.rs`, `server/src/main.rs`, `client/src/main.rs`
 
-- [ ] **`X-Burrow-Request-Id` passthrough header**
-  Inject `X-Burrow-Request-Id: <request_id>` into forwarded requests so local service logs can be correlated with burrow server logs for distributed tracing.
+- [x] **`X-Burrow-Request-Id` passthrough header**
+  Injected into forwarded requests so local service logs can be correlated with burrow server logs.
   _Files:_ `server/src/main.rs`
 
 ---
 
 ## 🟢 DX / Ops
 
-- [ ] **Single binary with subcommands (`burrow server` / `burrow client`)**
-  Currently two separate binaries. Merge into one binary using `clap` subcommands.
-  Simplifies releases, installation (`cargo install burrow-rs`), and Docker image size.
-  _Files:_ `server/src/main.rs`, `client/src/main.rs`, `Cargo.toml`
+- [x] **Single binary with subcommands (`burrow server` / `burrow client`)**
+  Both packages expose library entry points (`burrow_server::run`, `burrow_client::run`).
+  New `cli` crate provides the unified `burrow` binary with subcommands.
+  Old `burrow-server` and `burrow-client` binaries still built for backward compat.
+  _Files:_ `cli/src/main.rs`, `server/src/lib.rs`, `client/src/lib.rs`, `Cargo.toml`
 
 - [ ] **`~/.burrow.toml` config file**
   Persistent config so users don't need env vars or CLI flags every time.
@@ -117,10 +117,9 @@
   Requires changing `ControlMessage` to support chunked framing (e.g. `RequestChunk` / `ResponseChunk` variants) and updating both server and client pump loops.
   _Files:_ `common/src/lib.rs`, `server/src/main.rs`, `client/src/main.rs`
 
-- [ ] **Configurable body size limit**
-  Body limit is hardcoded at 4 MB in `proxy_handler`.
-  nginx default is 1 MB — mismatch causes confusing 413s at the wrong layer.
-  Expose as `MAX_BODY_BYTES` env var on server; document alignment with nginx `client_max_body_size`.
+- [x] **Configurable body size limit**
+  Body limit exposed as `MAX_BODY_BYTES` env var on server (default 4 MB).
+  Documented in README and render.yaml.
   _Files:_ `server/src/main.rs`, `README.md`, `render.yaml`
 
 - [ ] **Structured access logging**

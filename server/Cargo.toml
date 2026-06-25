@@ -3,6 +3,10 @@ name = "burrow-server"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "burrow_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "burrow-server"
 path = "src/main.rs"

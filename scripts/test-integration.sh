@@ -54,8 +54,7 @@ assert_contains() {
 BUILT=${1:-}
 if [[ "$BUILT" != "skipbuild" ]]; then
     echo "=== Building ==="
-    cargo build --release --bin burrow-server 2>&1
-    cargo build --release --bin burrow 2>&1
+    cargo build --release -p burrow-server -p burrow-client 2>&1
 fi
 
 # ── Pick free ports ───────────────────────────────────────────────────────────
@@ -107,7 +106,7 @@ TUNNEL_TOKEN=test-secret \
 LOCAL_PORT=$LOCAL_PORT \
 TUNNEL_SUBDOMAIN=testapp \
 RUST_LOG=burrow=info \
-./target/release/burrow --reconnect-delay 10 &
+./target/release/burrow-client --reconnect-delay 10 &
 CLIENT_PID=$!
 sleep 2
 if ! kill -0 "$CLIENT_PID" 2>/dev/null; then
@@ -153,14 +152,16 @@ TUNNEL_TOKEN=test-secret \
 LOCAL_PORT=$HEADER_PORT \
 TUNNEL_SUBDOMAIN=headers \
 RUST_LOG=burrow=info \
-./target/release/burrow --reconnect-delay 10 &
+./target/release/burrow-client --reconnect-delay 10 &
 CLIENT2_PID=$!
 sleep 2
 
 HEADER_RESP=$(curl -s "http://127.0.0.1:$SERVER_PORT/headers/" 2>&1)
-assert_contains "X-Forwarded-For present" "x-forwarded-for" "$(echo "$HEADER_RESP" | tr '[:upper:]' '[:lower:]')"
+HEADER_RESP_LOW=$(echo "$HEADER_RESP" | tr '[:upper:]' '[:lower:]')
+assert_contains "X-Forwarded-For present" "x-forwarded-for" "$HEADER_RESP_LOW"
 assert_contains "X-Forwarded-Proto is https" "https" "$HEADER_RESP"
 assert_contains "Host header rewritten" "127.0.0.1" "$HEADER_RESP"
+assert_contains "X-Burrow-Request-Id present" "x-burrow-request-id" "$HEADER_RESP_LOW"
 kill "$CLIENT2_PID" 2>/dev/null || true
 kill "$ECHO_PID" 2>/dev/null || true
 
@@ -190,7 +191,7 @@ TUNNEL_TOKEN=test-secret \
 LOCAL_PORT=$ECHO2_PORT \
 TUNNEL_SUBDOMAIN=posttest \
 RUST_LOG=burrow=info \
-./target/release/burrow --reconnect-delay 10 &
+./target/release/burrow-client --reconnect-delay 10 &
 CLIENT3_PID=$!
 sleep 2
 
@@ -214,7 +215,7 @@ BAD_TOKEN_OUT=$(TUNNEL_SERVER="ws://127.0.0.1:$SERVER_PORT/tunnel/ws" \
     TUNNEL_TOKEN=wrong-token \
     LOCAL_PORT=$LOCAL_PORT \
     RUST_LOG=burrow=info \
-    timeout 3 ./target/release/burrow --reconnect-delay 1 2>&1 || true)
+    timeout 3 ./target/release/burrow-client --reconnect-delay 1 2>&1 || true)
 assert_contains "bad token rejected" "invalid token" "$BAD_TOKEN_OUT"
 
 # ── Test 6: Subdomain already in use ──────────────────────────────────────────
@@ -224,7 +225,7 @@ DUP_OUT=$(TUNNEL_SERVER="ws://127.0.0.1:$SERVER_PORT/tunnel/ws" \
     LOCAL_PORT=$LOCAL_PORT \
     TUNNEL_SUBDOMAIN=testapp \
     RUST_LOG=burrow=info \
-    timeout 3 ./target/release/burrow --reconnect-delay 1 2>&1 || true)
+    timeout 3 ./target/release/burrow-client --reconnect-delay 1 2>&1 || true)
 assert_contains "duplicate subdomain rejected" "already in use" "$DUP_OUT"
 
 # ── Summary ────────────────────────────────────────────────────────────────────

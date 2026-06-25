@@ -1,0 +1,18 @@
+[package]
+name = "burrow"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "burrow"
+path = "src/main.rs"
+
+[dependencies]
+burrow-server = { path = "../server" }
+burrow-client = { path = "../client" }
+burrow-common = { path = "../common" }
+clap = { version = "4", features = ["derive", "env"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
