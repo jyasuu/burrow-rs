@@ -80,7 +80,9 @@ async fn run_session(args: &ClientOpts) -> Result<(), ClientError> {
         subdomain: args.subdomain.clone(),
         token: args.token.clone(),
     };
-    ws_send.send(Message::Text(register.to_json())).await?;
+    ws_send
+        .send(Message::Text(register.to_json().into()))
+        .await?;
 
     let (public_url, _subdomain) = match ws_recv.next().await {
         Some(Ok(Message::Text(txt))) => match ControlMessage::from_json(&txt) {
@@ -116,7 +118,11 @@ async fn run_session(args: &ClientOpts) -> Result<(), ClientError> {
 
     let mut send_task = tokio::spawn(async move {
         while let Some(msg) = resp_rx.recv().await {
-            if ws_send.send(Message::Text(msg.to_json())).await.is_err() {
+            if ws_send
+                .send(Message::Text(msg.to_json().into()))
+                .await
+                .is_err()
+            {
                 break;
             }
         }
