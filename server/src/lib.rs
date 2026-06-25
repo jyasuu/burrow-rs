@@ -9,25 +9,19 @@ use axum::{
     routing::get,
     Router,
 };
-use std::net::SocketAddr;
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use burrow_common::ControlMessage;
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
 use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
-use std::{
-    collections::HashMap,
-    net::IpAddr,
-    num::NonZeroU32,
-    sync::Arc,
-    time::Duration,
-};
+use std::net::SocketAddr;
+use std::{collections::HashMap, net::IpAddr, num::NonZeroU32, sync::Arc, time::Duration};
 use subtle::ConstantTimeEq;
 use tokio::{
     sync::{oneshot, Mutex, RwLock},
     time::{interval, timeout},
 };
 use tracing::{info, warn};
-use burrow_common::ControlMessage;
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
@@ -99,7 +93,11 @@ pub async fn run(opts: ServerOpts) -> Result<(), ServerError> {
     let addr = format!("0.0.0.0:{}", opts.port);
     info!("Burrow server listening on {addr}");
     let listener = tokio::net::TcpListener::bind(&addr).await?;
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -203,11 +201,7 @@ async fn handle_client(socket: WebSocket, state: AppState) {
 
     let send_task = tokio::spawn(async move {
         while let Some(msg) = msg_rx.recv().await {
-            if ws_send
-                .send(Message::Text(msg.to_json()))
-                .await
-                .is_err()
-            {
+            if ws_send.send(Message::Text(msg.to_json())).await.is_err() {
                 break;
             }
         }
@@ -258,7 +252,8 @@ async fn proxy_handler(
     req: Request<Body>,
 ) -> Response {
     {
-        let limiter = state.rate_limiters
+        let limiter = state
+            .rate_limiters
             .entry(peer.ip())
             .or_insert_with(|| Arc::new(RateLimiter::direct(state.quota)));
         if limiter.check().is_err() {
@@ -379,9 +374,9 @@ async fn proxy_handler(
                     response = response.header(name, val);
                 }
             }
-            response
-                .body(Body::from(body))
-                .unwrap_or_else(|_| error_response(StatusCode::INTERNAL_SERVER_ERROR, "build error"))
+            response.body(Body::from(body)).unwrap_or_else(|_| {
+                error_response(StatusCode::INTERNAL_SERVER_ERROR, "build error")
+            })
         }
         Ok(Ok(_)) | Ok(Err(_)) => error_response(StatusCode::BAD_GATEWAY, "unexpected response"),
         Err(_) => {

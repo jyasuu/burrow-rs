@@ -3,7 +3,10 @@ use clap::{Parser, Subcommand};
 use tracing::warn;
 
 #[derive(Parser, Debug)]
-#[command(name = "burrow", about = "HTTP reverse tunnel – expose localhost to the internet")]
+#[command(
+    name = "burrow",
+    about = "HTTP reverse tunnel – expose localhost to the internet"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -32,7 +35,12 @@ enum Command {
         #[arg(short, long, env = "LOCAL_PORT", default_value = "3000")]
         port: u16,
         /// Tunnel server WebSocket URL
-        #[arg(short, long, env = "TUNNEL_SERVER", default_value = "ws://localhost:8080/tunnel/ws")]
+        #[arg(
+            short,
+            long,
+            env = "TUNNEL_SERVER",
+            default_value = "ws://localhost:8080/tunnel/ws"
+        )]
         server: String,
         /// Auth token
         #[arg(short, long, env = "TUNNEL_TOKEN", default_value = "changeme")]
@@ -49,16 +57,18 @@ enum Command {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            std::env::var("RUST_LOG")
-                .unwrap_or_else(|_| "burrow=info".into()),
-        )
+        .with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "burrow=info".into()))
         .init();
 
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Server { secret, public_host, port, max_body_bytes } => {
+        Command::Server {
+            secret,
+            public_host,
+            port,
+            max_body_bytes,
+        } => {
             let secret = secret.unwrap_or_else(|| {
                 warn!("SERVER_SECRET not set – using insecure default");
                 "changeme".to_string()
@@ -76,7 +86,13 @@ async fn main() -> Result<()> {
             .await
             .map_err(anyhow::Error::from)
         }
-        Command::Client { port, server, token, subdomain, reconnect_delay } => {
+        Command::Client {
+            port,
+            server,
+            token,
+            subdomain,
+            reconnect_delay,
+        } => {
             let opts = burrow_client::ClientOpts {
                 port,
                 server,

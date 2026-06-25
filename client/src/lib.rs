@@ -1,11 +1,11 @@
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use burrow_common::ControlMessage;
 use futures_util::{SinkExt, StreamExt};
 use reqwest::Client as HttpClient;
 use std::time::Duration;
 use tokio::time::sleep;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info, warn};
-use burrow_common::ControlMessage;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
@@ -55,10 +55,16 @@ pub async fn run(opts: &ClientOpts) -> Result<(), ClientError> {
         );
         match run_session(opts).await {
             Ok(()) => {
-                info!("Session ended cleanly. Reconnecting in {}s\u{2026}", opts.reconnect_delay);
+                info!(
+                    "Session ended cleanly. Reconnecting in {}s\u{2026}",
+                    opts.reconnect_delay
+                );
             }
             Err(e) => {
-                error!("Session error: {e:#}. Reconnecting in {}s\u{2026}", opts.reconnect_delay);
+                error!(
+                    "Session error: {e:#}. Reconnecting in {}s\u{2026}",
+                    opts.reconnect_delay
+                );
             }
         }
         sleep(Duration::from_secs(opts.reconnect_delay)).await;
@@ -74,13 +80,14 @@ async fn run_session(args: &ClientOpts) -> Result<(), ClientError> {
         subdomain: args.subdomain.clone(),
         token: args.token.clone(),
     };
-    ws_send
-        .send(Message::Text(register.to_json()))
-        .await?;
+    ws_send.send(Message::Text(register.to_json())).await?;
 
     let (public_url, _subdomain) = match ws_recv.next().await {
         Some(Ok(Message::Text(txt))) => match ControlMessage::from_json(&txt) {
-            Ok(ControlMessage::Registered { public_url, subdomain }) => {
+            Ok(ControlMessage::Registered {
+                public_url,
+                subdomain,
+            }) => {
                 info!("✅ Tunnel active!");
                 info!("   Public URL : {public_url}");
                 info!("   Subdomain  : {subdomain}");
@@ -105,16 +112,11 @@ async fn run_session(args: &ClientOpts) -> Result<(), ClientError> {
         .build()?;
     let local_port = args.port;
 
-    let (resp_tx, mut resp_rx) =
-        tokio::sync::mpsc::channel::<ControlMessage>(64);
+    let (resp_tx, mut resp_rx) = tokio::sync::mpsc::channel::<ControlMessage>(64);
 
     let mut send_task = tokio::spawn(async move {
         while let Some(msg) = resp_rx.recv().await {
-            if ws_send
-                .send(Message::Text(msg.to_json()))
-                .await
-                .is_err()
-            {
+            if ws_send.send(Message::Text(msg.to_json())).await.is_err() {
                 break;
             }
         }
@@ -205,7 +207,11 @@ fn connection_tokens(headers: &[(String, String)]) -> Vec<String> {
     headers
         .iter()
         .filter(|(k, _)| k.to_lowercase() == "connection")
-        .flat_map(|(_, v)| v.split(',').map(|t| t.trim().to_lowercase()).collect::<Vec<_>>())
+        .flat_map(|(_, v)| {
+            v.split(',')
+                .map(|t| t.trim().to_lowercase())
+                .collect::<Vec<_>>()
+        })
         .collect()
 }
 
@@ -362,9 +368,7 @@ mod tests {
 
     #[test]
     fn connection_tokens_parses() {
-        let headers = vec![
-            ("connection".into(), "keep-alive, x-foo".into()),
-        ];
+        let headers = vec![("connection".into(), "keep-alive, x-foo".into())];
         let tokens = connection_tokens(&headers);
         assert!(tokens.contains(&"keep-alive".to_string()));
         assert!(tokens.contains(&"x-foo".to_string()));
@@ -379,9 +383,7 @@ mod tests {
 
     #[test]
     fn connection_tokens_case_insensitive_key() {
-        let headers = vec![
-            ("Connection".into(), "X-Foo".into()),
-        ];
+        let headers = vec![("Connection".into(), "X-Foo".into())];
         let tokens = connection_tokens(&headers);
         assert!(tokens.contains(&"x-foo".to_string()));
     }
@@ -409,28 +411,19 @@ mod tests {
 
     #[test]
     fn rewrite_domain_127_0_0_1_to_public() {
-        let result = rewrite_set_cookie_domain(
-            "token=xyz; Domain=127.0.0.1",
-            "example.com",
-        );
+        let result = rewrite_set_cookie_domain("token=xyz; Domain=127.0.0.1", "example.com");
         assert_eq!(result, "token=xyz; Domain=example.com");
     }
 
     #[test]
     fn rewrite_domain_case_insensitive() {
-        let result = rewrite_set_cookie_domain(
-            "x=y; DOMAIN=LOCALHOST",
-            "public.io",
-        );
+        let result = rewrite_set_cookie_domain("x=y; DOMAIN=LOCALHOST", "public.io");
         assert_eq!(result, "x=y; Domain=public.io");
     }
 
     #[test]
     fn rewrite_domain_other_domain_untouched() {
-        let result = rewrite_set_cookie_domain(
-            "x=y; Domain=.example.com",
-            "public.io",
-        );
+        let result = rewrite_set_cookie_domain("x=y; Domain=.example.com", "public.io");
         assert_eq!(result, "x=y; Domain=.example.com");
     }
 
@@ -445,10 +438,7 @@ mod tests {
 
     #[test]
     fn rewrite_domain_no_domain_unchanged() {
-        let result = rewrite_set_cookie_domain(
-            "session=abc; Path=/",
-            "p.io",
-        );
+        let result = rewrite_set_cookie_domain("session=abc; Path=/", "p.io");
         assert_eq!(result, "session=abc; Path=/");
     }
 
@@ -462,12 +452,22 @@ mod tests {
     fn error_response_format() {
         let msg = error_response("req-1", "upstream error: connection refused");
         match msg {
-            ControlMessage::ResponseOutgoing { request_id, status, headers, body_b64 } => {
+            ControlMessage::ResponseOutgoing {
+                request_id,
+                status,
+                headers,
+                body_b64,
+            } => {
                 assert_eq!(request_id, "req-1");
                 assert_eq!(status, 502);
-                assert!(headers.iter().any(|(k, v)| k == "content-type" && v == "text/plain"));
+                assert!(headers
+                    .iter()
+                    .any(|(k, v)| k == "content-type" && v == "text/plain"));
                 let body = B64.decode(&body_b64).unwrap();
-                assert_eq!(String::from_utf8_lossy(&body), "upstream error: connection refused");
+                assert_eq!(
+                    String::from_utf8_lossy(&body),
+                    "upstream error: connection refused"
+                );
             }
             _ => panic!("wrong variant"),
         }

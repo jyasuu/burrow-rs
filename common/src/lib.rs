@@ -141,7 +141,10 @@ mod tests {
         let json = msg.to_json();
         let decoded = ControlMessage::from_json(&json).unwrap();
         match decoded {
-            ControlMessage::Registered { subdomain, public_url } => {
+            ControlMessage::Registered {
+                subdomain,
+                public_url,
+            } => {
                 assert_eq!(subdomain, "abc123");
                 assert_eq!(public_url, "https://example.com/abc123");
             }
@@ -161,11 +164,20 @@ mod tests {
         let json = msg.to_json();
         let decoded = ControlMessage::from_json(&json).unwrap();
         match decoded {
-            ControlMessage::RequestIncoming { request_id, method, path, headers, body_b64 } => {
+            ControlMessage::RequestIncoming {
+                request_id,
+                method,
+                path,
+                headers,
+                body_b64,
+            } => {
                 assert_eq!(request_id, "req-1");
                 assert_eq!(method, "POST");
                 assert_eq!(path, "/api/data");
-                assert_eq!(headers[0], ("content-type".into(), "application/json".into()));
+                assert_eq!(
+                    headers[0],
+                    ("content-type".into(), "application/json".into())
+                );
                 assert_eq!(body_b64, "aGVsbG8=");
             }
             _ => panic!("wrong variant"),
@@ -183,7 +195,12 @@ mod tests {
         let json = msg.to_json();
         let decoded = ControlMessage::from_json(&json).unwrap();
         match decoded {
-            ControlMessage::ResponseOutgoing { request_id, status, headers, body_b64 } => {
+            ControlMessage::ResponseOutgoing {
+                request_id,
+                status,
+                headers,
+                body_b64,
+            } => {
                 assert_eq!(request_id, "req-1");
                 assert_eq!(status, 200);
                 assert_eq!(headers[0], ("x-custom".into(), "val".into()));
@@ -213,7 +230,9 @@ mod tests {
 
     #[test]
     fn round_trip_error() {
-        let msg = ControlMessage::Error { message: "something went wrong".into() };
+        let msg = ControlMessage::Error {
+            message: "something went wrong".into(),
+        };
         let json = msg.to_json();
         let decoded = ControlMessage::from_json(&json).unwrap();
         match decoded {
@@ -226,14 +245,8 @@ mod tests {
 
     #[test]
     fn json_tag_snake_case() {
-        assert_eq!(
-            ControlMessage::Ping.to_json(),
-            r#"{"type":"ping"}"#
-        );
-        assert_eq!(
-            ControlMessage::Pong.to_json(),
-            r#"{"type":"pong"}"#
-        );
+        assert_eq!(ControlMessage::Ping.to_json(), r#"{"type":"ping"}"#);
+        assert_eq!(ControlMessage::Pong.to_json(), r#"{"type":"pong"}"#);
         let reg = ControlMessage::Register {
             subdomain: None,
             token: "t".into(),
