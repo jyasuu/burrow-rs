@@ -1,3 +1,19 @@
+//! burrow-rs tunnel server.
+//!
+//! Accepts WebSocket connections from tunnel clients at `/tunnel/ws`, and
+//! proxies external HTTP requests through to registered clients. Supports
+//! multiple concurrent tunnels, header rewriting, rate limiting, and
+//! keep-alive heartbeats.
+//!
+//! # Environment variables
+//!
+//! | Variable | Default | Description |
+//! |---|---|---|
+//! | `SERVER_SECRET` | `"changeme"` | Auth token clients must send to register |
+//! | `PUBLIC_HOST` | `"localhost"` | Public-facing hostname for tunnel URLs |
+//! | `PORT` | `8080` | HTTP listen port |
+//! | `RUST_LOG` | `"burrow_server=debug,tower_http=info"` | Tracing filter |
+
 use anyhow::Result;
 use axum::{
     body::Body,

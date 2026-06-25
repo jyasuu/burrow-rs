@@ -1,59 +1,111 @@
+//! Wire protocol for the burrow-rs HTTP reverse tunnel.
+//!
+//! All communication between the server and client happens over a WebSocket
+//! connection using JSON-serialized [`ControlMessage`] values. The protocol
+//! uses a tagged enum (`{ "type": "variant_name", ... }`) for framing.
+//!
+//! # Protocol flow
+//!
+//! 1. Client sends [`Register`](ControlMessage::Register) with auth token.
+//! 2. Server responds with [`Registered`](ControlMessage::Registered) on success,
+//!    or [`Error`](ControlMessage::Error) on failure.
+//! 3. For each incoming HTTP request, server sends
+//!    [`RequestIncoming`](ControlMessage::RequestIncoming).
+//! 4. Client forwards to localhost, then replies with
+//!    [`ResponseOutgoing`](ControlMessage::ResponseOutgoing).
+//! 5. Server sends [`Ping`](ControlMessage::Ping) every 30s for keep-alive;
+//!    client responds with [`Pong`](ControlMessage::Pong).
+//!
+//! # Example
+//!
+//! ```ignore
+//! use burrow_common::ControlMessage;
+//!
+//! let register = ControlMessage::Register {
+//!     subdomain: Some("myapp".into()),
+//!     token: "secret".into(),
+//! };
+//! let json = register.to_json();
+//! let decoded = ControlMessage::from_json(&json).unwrap();
+//! ```
+
 use serde::{Deserialize, Serialize};
 
-/// Messages sent over the WebSocket control channel
+/// A message sent over the burrow WebSocket control channel.
+///
+/// Each variant is serialized as a JSON object with a `"type"` field
+/// (e.g. `{"type": "ping"}`). The serialization format is stable across
+/// server and client versions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ControlMessage {
-    /// Client → Server: register and request a tunnel
+    /// Client → Server: register and request a tunnel.
     Register {
-        /// Optional desired subdomain; server assigns one if None
+        /// Desired subdomain. The server assigns a random one if `None`.
         subdomain: Option<String>,
-        /// Secret token for auth (set via env SERVER_SECRET)
+        /// Auth token. Must match the server's `SERVER_SECRET`.
         token: String,
     },
 
-    /// Server → Client: tunnel ready
+    /// Server → Client: tunnel is ready.
     Registered {
-        /// Assigned subdomain, e.g. "abc123"
+        /// The assigned subdomain (e.g. `"abc123"` or the requested one).
         subdomain: String,
-        /// Full public URL
+        /// Full public URL (e.g. `"https://burrow.example.com/myapp"`).
         public_url: String,
     },
 
-    /// Server → Client: a new HTTP request arrived
+    /// Server → Client: an incoming HTTP request to forward.
     RequestIncoming {
-        /// Unique ID for this request/response pair
+        /// Unique ID correlating request and response.
         request_id: String,
+        /// HTTP method (e.g. `"GET"`, `"POST"`).
         method: String,
+        /// Request path (e.g. `"/api/foo?q=1"`).
         path: String,
+        /// Request headers as key-value pairs.
         headers: Vec<(String, String)>,
-        /// Base64-encoded body (may be empty)
+        /// Base64-encoded request body (empty string if no body).
         body_b64: String,
     },
 
-    /// Client → Server: HTTP response from local service
+    /// Client → Server: the HTTP response from the local service.
     ResponseOutgoing {
+        /// Must match the `request_id` from the corresponding `RequestIncoming`.
         request_id: String,
+        /// HTTP status code (e.g. `200`, `404`).
         status: u16,
+        /// Response headers as key-value pairs.
         headers: Vec<(String, String)>,
-        /// Base64-encoded body
+        /// Base64-encoded response body.
         body_b64: String,
     },
 
-    /// Either direction: keep-alive ping
+    /// Either direction: keep-alive ping (server sends every 30s).
     Ping,
-    /// Either direction: keep-alive pong
+    /// Either direction: keep-alive pong (client auto-replies).
     Pong,
 
-    /// Server → Client: auth failed or other error
-    Error { message: String },
+    /// Server → Client: an error occurred (auth failure, bad request, etc.).
+    Error {
+        /// Human-readable error description.
+        message: String,
+    },
 }
 
 impl ControlMessage {
+    /// Serialize this message to a JSON string.
+    ///
+    /// # Panics
+    ///
+    /// Panics if serialization fails (should never happen for this type).
     pub fn to_json(&self) -> String {
         serde_json::to_string(self).expect("serialize ControlMessage")
     }
 
+    /// Deserialize a message from a JSON string.
+    ///
+    /// Returns `Err` if the JSON is malformed or the `"type"` tag is unknown.
     pub fn from_json(s: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(s)
     }

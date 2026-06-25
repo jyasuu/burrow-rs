@@ -1,3 +1,19 @@
+//! burrow-rs tunnel client.
+//!
+//! Connects to a burrow-server via WebSocket, registers a tunnel, and forwards
+//! incoming HTTP requests to a local service. Automatically reconnects on
+//! connection loss.
+//!
+//! # Usage
+//!
+//! ```bash
+//! TUNNEL_SERVER=ws://localhost:8080/tunnel/ws \
+//! TUNNEL_TOKEN=my-secret \
+//! LOCAL_PORT=3000 \
+//! TUNNEL_SUBDOMAIN=myapp \
+//! burrow
+//! ```
+
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use clap::Parser;
