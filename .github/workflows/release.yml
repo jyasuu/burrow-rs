@@ -13,6 +13,7 @@ jobs:
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
@@ -21,7 +22,7 @@ jobs:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             ext: ""
-            deps: musl-tools
+            builder: docker
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             ext: ".exe"
@@ -39,7 +40,18 @@ jobs:
       - name: Install system deps
         if: matrix.deps
         run: sudo apt-get update && sudo apt-get install -y ${{ matrix.deps }}
+      - name: Build (Docker-based cross compile)
+        if: matrix.builder == 'docker'
+        run: |
+          docker run --rm -v $PWD:/workspace -w /workspace \
+            rust:alpine sh -c "\
+              apk add --no-cache musl-dev openssl-dev pkgconfig \
+              && cargo build --release -p burrow \
+            "
+          mkdir -p target/${{ matrix.target }}/release
+          cp target/release/burrow target/${{ matrix.target }}/release/burrow
       - run: cargo build --release --bin burrow --target ${{ matrix.target }}
+        if: matrix.builder != 'docker'
       - name: Package
         shell: bash
         run: |
@@ -59,7 +71,7 @@ jobs:
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
