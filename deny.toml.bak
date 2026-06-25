@@ -1,12 +1,16 @@
 [advisories]
+vulnerability = "deny"
+unmaintained = "warn"
+unsound = "deny"
+notice = "warn"
 ignore = []
 
 [bans]
 multiple-versions = "warn"
 wildcards = "allow"
+deny = []
 
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = []
